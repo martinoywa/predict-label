@@ -31,6 +31,7 @@ public class MainActivity extends AppCompatActivity {
     Uri imageUri;
     Module module;
     Bitmap bitmap;
+    TextView textView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -43,6 +44,7 @@ public class MainActivity extends AppCompatActivity {
             Log.e("Predic Label", "Error reading assests", e);
         }
 
+        textView = findViewById(R.id.text);
         imageView = (ImageView) findViewById(R.id.picture);
         imageView.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -70,28 +72,38 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        // preparing input Tensor
-        final Tensor inputTensor = TensorImageUtils.bitmapToFloat32Tensor(bitmap,
-                TensorImageUtils.TORCHVISION_NORM_MEAN_RGB, TensorImageUtils.TORCHVISION_NORM_STD_RGB);
+        Thread thread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                // preparing input Tensor
+                final Tensor inputTensor = TensorImageUtils.bitmapToFloat32Tensor(bitmap,
+                        TensorImageUtils.TORCHVISION_NORM_MEAN_RGB, TensorImageUtils.TORCHVISION_NORM_STD_RGB);
 
-        // running the model
-        Tensor outputTensor = module.forward(IValue.from(inputTensor)).toTensor();
-        final float[] scores = outputTensor.getDataAsFloatArray();
+                // running the model
+                Tensor outputTensor = module.forward(IValue.from(inputTensor)).toTensor();
+                final float[] scores = outputTensor.getDataAsFloatArray();
 
-        float maxScore = -Float.MAX_VALUE;
-        int maxScoreIdx = -1;
-        for (int i = 0; i < scores.length; i++) {
-            if (scores[i] > maxScore) {
-                maxScore = scores[i];
-                maxScoreIdx = i;
+                float maxScore = -Float.MAX_VALUE;
+                int maxScoreIdx = -1;
+                for (int i = 0; i < scores.length; i++) {
+                    if (scores[i] > maxScore) {
+                        maxScore = scores[i];
+                        maxScoreIdx = i;
+                    }
+                }
+
+                final String className = ImageNetClasses.IMAGENET_CLASSES[maxScoreIdx];
+
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        textView.setText(className);
+                    }
+                });
             }
-        }
+        });
 
-        String className = ImageNetClasses.IMAGENET_CLASSES[maxScoreIdx];
-
-        TextView textView = findViewById(R.id.text);
-        textView.setText(className);
-
+        thread.start();
     }
 
     public static String assetFilePath(Context context, String assetName) throws IOException {
@@ -102,7 +114,7 @@ public class MainActivity extends AppCompatActivity {
 
         try (InputStream is = context.getAssets().open(assetName)) {
             try (OutputStream os = new FileOutputStream(file)) {
-                byte[] buffer = new byte[4 * 1024];
+                byte[] buffer = new byte[1020 * 1024];
                 int read;
                 while ((read = is.read(buffer)) != -1) {
                     os.write(buffer, 0, read);
